@@ -1,0 +1,305 @@
+# ==============================================================================
+# requirements.txt
+# ==============================================================================
+# Project : "Reflexivity as Prompt: Does Awareness of Self-Reinforcing Market
+#             Dynamics Improve LLMs as Financial Market Forecasters?"
+# Paper   : Park, E. (2026). arXiv:2606.00061v1 [q-fin.ST]
+#           https://arxiv.org/abs/2606.00061
+# Impl.   : CS Chirinda
+# Version : 1.0.0
+# Python  : >=3.10, <3.13   (NOT enforced by pip; enforced by CI/CD)
+# ==============================================================================
+# PROVENANCE LEGEND
+#   VERBATIM  : Package required by an explicit `import` statement in the module.
+#   IMPLICIT  : Package required at runtime by a called function (not directly
+#               imported), but whose absence raises ImportError or ValueError.
+#   INFERRED  : Package required to produce the module's input data (df_yahoo_raw,
+#               df_shiller_raw) from their primary sources. Not imported by the
+#               core module, but required for end-to-end pipeline execution.
+#   INFRA     : Package required for secure key management and operational
+#               reproducibility. Not imported by the core module.
+# ==============================================================================
+# INSTALLATION
+#   pip install -r requirements.txt
+# UPGRADE POLICY
+#   Re-pin after each quarterly dependency audit. Test against upper bounds
+#   before relaxing a ceiling. Never use `pip install --upgrade` without a
+#   corresponding test run of the full 3,456-call pipeline.
+# ==============================================================================
+
+
+# ==============================================================================
+# SECTION 1 — NUMERICAL COMPUTING AND ARRAY OPERATIONS
+# Provenance: VERBATIM
+# ==============================================================================
+
+# Core n-dimensional array library.
+# Used for:
+#   • float64 price (Pₜ) and EPS (EPSₜ) array storage (288-element vectors)
+#   • Vectorized normalization arithmetic:
+#       N1:  P'_k  = 100 * price_array[t0-1 : t0+W-1] / P0
+#       N2:  EPS'_k = 100 * eps_array[t0-1 : t0+W-1]  / P0
+#   • numpy.round(array, decimals=2) for 2 d.p. serialization rounding
+#   • numpy.mean(r_port) and numpy.std(r_port, ddof=1) for Sharpe computation
+#       Note: ddof=1 is the Bessel-corrected sample estimator; ddof=0 is WRONG
+#   • numpy.sqrt(12) annualization factor (= 3.4641016151377544)
+#   • numpy.concatenate([dotcom_returns, gfc_returns]) for combined 144-obs series
+#   • numpy.allclose(P_prime/EPS_prime, P_raw/EPS_raw, rtol=0, atol=1e-10)
+#       for P/E ratio preservation invariant verification
+#   • numpy.float64 dtype enforcement on price and EPS arrays
+# Minimum version rationale:
+#   1.24.0 introduces stable structured dtype handling and eliminates
+#   known precision regressions in vectorized reduction operations.
+# Upper bound: <3.0.0 guards against NumPy 3.x breaking changes to
+#   ufunc signatures and array protocol.
+numpy>=1.24.0,<3.0.0
+
+# Tabular data manipulation library.
+# Used for:
+#   • pd.DataFrame for the canonical 288-row merged dataset
+#       columns: t (int64, 1-288), P_t (float64), EPS_t (float64)
+#   • pd.MultiIndex.from_tuples() for 12-row × 6-column results tables
+#       (episode × condition rows; model × window columns)
+#   • pd.to_datetime(df["Date"], format="%Y-%m-%d") for Yahoo Finance parsing
+#   • df["Date"].dt.to_period("M") for month-level join key construction
+#   • pd.merge(yahoo_keyed, shiller_keyed, on="ym_key", how="inner")
+#       for calendar-month alignment of heterogeneous sources
+#   • pd.read_excel(path, sheet_name="Data") for Shiller workbook loading
+#       (requires openpyxl as the backend engine; see Section 2)
+#   • Series.is_unique for duplicate-month detection
+#   • df.dt.to_period("M").is_unique for chronological integrity assertion
+# Minimum version rationale:
+#   2.0.0 introduces mandatory Copy-on-Write semantics, eliminates
+#   silent in-place modification bugs, and stabilizes the pd.Period
+#   arithmetic used in the (year, month) join key pipeline.
+# Upper bound: <3.0.0 guards against pandas 3.x breaking changes to
+#   read_excel engine detection and MultiIndex construction.
+pandas>=2.0.0,<3.0.0
+
+
+# ==============================================================================
+# SECTION 2 — EXCEL FILE I/O (SHILLER DATASET)
+# Provenance: IMPLICIT (required by pandas.read_excel() at runtime)
+# ==============================================================================
+
+# Excel engine for reading .xlsx format Shiller workbooks.
+# Invoked implicitly by pd.read_excel(path, sheet_name="Data", engine="openpyxl")
+# when loading the Shiller "U.S. Stock Markets 1871-Present and CAPE Ratio"
+# workbook from http://www.econ.yale.edu/~shiller/data.htm (Accessed May 2025).
+# Only the "Earnings" column (= EPSₜ) is consumed; all others are noise.
+# Minimum version rationale:
+#   3.1.0 fixes a cell-value type coercion bug present in 3.0.x that
+#   silently converts the decimal-year float Date column (e.g., 1986.00)
+#   to a string, causing the Shiller date-decoding formula to raise TypeError.
+#   Constraint: openpyxl ONLY reads .xlsx format. For legacy .xls Shiller
+#   workbooks (pre-2020 distribution), xlrd>=2.0.1 is required (see below).
+# Upper bound: <4.0.0 is forward protection; no 4.x release exists.
+openpyxl>=3.1.0,<4.0.0
+
+# Excel engine for reading legacy .xls format Shiller workbooks.
+# Required ONLY if the Shiller file is in .xls format (pre-2020 distribution).
+# CRITICAL: xlrd 2.0.0 deliberately REMOVED .xlsx support; it now handles
+#   ONLY .xls files. Do NOT use xlrd for .xlsx files — it will raise
+#   XLRDError. The current Shiller distribution is .xlsx (use openpyxl above).
+# Minimum version rationale:
+#   2.0.1 patches a security vulnerability in the OLE2 compound file parser
+#   present in all 1.x releases (CVE-2019-20907 analog for XLS parsing).
+# Upper bound: <3.0.0 is forward protection.
+xlrd>=2.0.1,<3.0.0
+
+
+# ==============================================================================
+# SECTION 3 — LLM PROVIDER SDKs
+# Provenance: VERBATIM (dynamically imported inside API client callables)
+# ==============================================================================
+# All three SDKs are required for full experimental grid execution.
+# Dynamic import pattern in the module:
+#   import openai               # inside configure_gpt5_client()
+#   import anthropic            # inside configure_claude_client()
+#   import google.generativeai  # inside configure_gemini_client()
+# Absent SDK → ImportError raised at client configuration time (before any
+# API call is attempted), not at module load time.
+
+# OpenAI Python SDK — for GPT-5 (temperature=1.0; stochastic; irreproducible).
+# API call pattern:
+#   client = openai.OpenAI(api_key=OPENAI_API_KEY)
+#   response = client.chat.completions.create(
+#       model="gpt-5",
+#       temperature=1.0,
+#       max_tokens=512,
+#       messages=[
+#           {"role": "system", "content": system_prompt},
+#           {"role": "user",   "content": time_series_table}
+#       ]
+#   )
+# CRITICAL REPRODUCIBILITY WARNING:
+#   GPT-5 at temperature=1.0 with no seed parameter produces a fresh
+#   stochastic draw on every API call. The paper's GPT-5 results are
+#   single-run point estimates with no reported variance. Exact numerical
+#   reproduction of GPT-5 results is categorically impossible under this
+#   specification (severity: FATAL per STUDY_CONFIG).
+# INCOMPATIBILITY WARNING:
+#   The pre-1.0.0 openai SDK used module-level functions (openai.ChatCompletion)
+#   which are structurally incompatible with the 1.x client-constructor pattern.
+#   Installing openai<1.0.0 will cause AttributeError at client instantiation.
+# Minimum version rationale:
+#   1.40.0 ensures stability of the chat.completions interface and captures
+#   all model registry entries for gpt-5 (released 2025-08-07).
+# Upper bound: <2.0.0 guards against a potential 2.x rewrite of the SDK API.
+openai>=1.40.0,<2.0.0
+
+# Anthropic Python SDK — for Claude Sonnet 4.6 (temperature=0; deterministic).
+# API call pattern (NOTE: system prompt is a TOP-LEVEL parameter, NOT in messages):
+#   client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+#   response = client.messages.create(
+#       model="claude-sonnet-4-6",
+#       max_tokens=512,
+#       temperature=0,
+#       system=system_prompt,          # TOP-LEVEL — NOT inside messages list
+#       messages=[
+#           {"role": "user", "content": time_series_table}
+#       ]
+#   )
+# STRUCTURAL TRAP: Placing the system prompt inside messages as
+#   {"role": "system", "content": ...} will raise an Anthropic API
+#   ValidationError. The system= parameter placement is mandatory.
+# SDK >=0.20.0 automatically injects the required header:
+#   anthropic-version: 2023-06-01
+# Model ID: "claude-sonnet-4-6" (dateless canonical ID for the 4.6 generation;
+#   no date suffix required per Anthropic documentation).
+# Minimum version rationale:
+#   0.25.0 stabilizes the messages.create() interface and the system=
+#   top-level parameter pattern used by this pipeline.
+# Upper bound: <1.0.0 guards against post-stabilization breaking rewrites.
+anthropic>=0.25.0,<1.0.0
+
+# Google GenerativeAI Python SDK — for Gemini 3 Pro (temperature=0).
+# pip package: google-generativeai   →   import google.generativeai
+# (Note: "google-generativeai" ≠ "google-genai"; these are distinct packages
+#  with incompatible import namespaces. The correct package for
+#  `import google.generativeai` is `google-generativeai`.)
+# API call pattern:
+#   import google.generativeai as genai
+#   client = genai.GenerativeModel(model_name="gemini-3-pro-preview")
+#   response = client.generate_content(
+#       contents=[{"role": "user", "parts": [{"text": time_series_table}]}],
+#       generation_config=genai.types.GenerationConfig(
+#           temperature=0,
+#           max_output_tokens=512   # NOTE: "max_output_tokens", NOT "max_tokens"
+#       ),
+#       system_instruction=system_prompt   # Google's name for system param
+#   )
+# PROVIDER-SPECIFIC TRAPS:
+#   • Parameter name is max_output_tokens (NOT max_tokens as in OpenAI/Anthropic)
+#   • System prompt key is system_instruction (NOT system or role:system)
+# DEPRECATION WARNING:
+#   "gemini-3-pro-preview" was deprecated on 2026-03-09 and now redirects to
+#   "gemini-3.1-pro-preview". Post-deprecation replication must substitute
+#   the successor model ID. This substitution is itself a source of model
+#   version drift (severity: HIGH per STUDY_CONFIG).
+# Minimum version rationale:
+#   0.8.0 provides the generate_content() interface with system_instruction
+#   support required by this pipeline.
+# Upper bound: <2.0.0 is forward protection.
+google-generativeai>=0.8.0,<2.0.0
+
+
+# ==============================================================================
+# SECTION 4 — FINANCIAL DATA ACQUISITION
+# Provenance: INFERRED
+# ==============================================================================
+# The core module ingests pre-loaded DataFrames (df_yahoo_raw, df_shiller_raw)
+# as parameters. The packages below are required for the data acquisition
+# phase that produces these DataFrames from their primary sources.
+# They are not imported by the core analytical module.
+
+# Yahoo Finance data downloader.
+# Used to acquire df_yahoo_raw:
+#   import yfinance as yf
+#   ticker = yf.Ticker("^GSPC")
+#   df = ticker.history(start="1986-01-01", end="2009-12-31", interval="1mo")
+# The "Adj Close" column of the resulting DataFrame is Pₜ.
+# CRITICAL REPRODUCIBILITY HAZARD:
+#   yfinance Adj Close values for ^GSPC are retroactively revised upon new
+#   dividend and split events. The same historical timestamp carries different
+#   Adj Close values depending on download date. The download date is therefore
+#   a material reproducibility parameter (severity: HIGH per STUDY_CONFIG).
+#   Mandatory mitigation: archive the raw CSV immediately upon download with
+#   an ISO-8601 timestamp in the filename.
+# Minimum version rationale:
+#   0.2.40 stabilizes the interval="1mo" monthly download interface,
+#   the "Adj Close" column naming convention, and the ^GSPC ticker handling.
+# Upper bound: <1.0.0 (no stable 1.x release exists as of June 2026).
+yfinance>=0.2.40,<1.0.0
+
+# HTTP requests library.
+# Used as a fallback for direct URL-based data acquisition:
+#   • Fetching the Shiller Excel workbook from
+#     http://www.econ.yale.edu/~shiller/data.htm
+#   • Streaming large files with requests.get(url, stream=True)
+# Not required if the Shiller workbook is already present on disk.
+# Minimum version rationale:
+#   2.31.0 incorporates security patches for CVE-2023-32681 (Proxy-Authorization
+#   header leak via redirect) present in all <=2.30.0 releases.
+# Upper bound: <3.0.0 guards against requests 3.x breaking changes to the
+#   Session and Response interfaces.
+requests>=2.31.0,<3.0.0
+
+
+# ==============================================================================
+# SECTION 5 — ENVIRONMENT AND SECRET MANAGEMENT
+# Provenance: INFRA
+# ==============================================================================
+
+# Loads API credentials from a .env file into os.environ at application startup.
+# Prevents hardcoding of OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY
+# in source files or config.yaml. Usage in the module entry point:
+#   from dotenv import load_dotenv
+#   load_dotenv(override=False)   # Does NOT overwrite already-set env vars
+#   OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY")
+#   ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+#   GOOGLE_API_KEY    = os.environ.get("GOOGLE_API_KEY")
+# SECURITY MANDATE:
+#   The .env file MUST be listed in .gitignore and MUST NOT be committed
+#   to version control. A .env.example file with placeholder values
+#   (YOUR_OPENAI_API_KEY_HERE etc.) should be committed instead.
+# PACKAGE NAME TRAP:
+#   The pip package is "python-dotenv"; the import is "from dotenv import ...".
+#   Installing the unrelated package "dotenv" (pip install dotenv) will NOT
+#   provide this functionality and will raise ImportError at runtime.
+# Minimum version rationale:
+#   1.0.0 introduced the override= parameter to load_dotenv(), which is
+#   required to prevent .env values from silently overwriting already-set
+#   CI/CD environment variables.
+# Upper bound: <2.0.0 is forward protection.
+python-dotenv>=1.0.0,<2.0.0
+
+
+# ==============================================================================
+# END OF requirements.txt
+# ==============================================================================
+# VERIFICATION COMMAND (run after installation):
+#   python -c "
+#   import numpy, pandas, openpyxl, xlrd, openai, anthropic;
+#   import google.generativeai;
+#   import yfinance, requests;
+#   from dotenv import load_dotenv;
+#   print('All dependencies satisfied.')
+#   "
+#
+# KNOWN ABSENT FROM THIS FILE (standard library; no pip entry needed):
+#   os, time, json, math, random, hashlib, re, logging,
+#   datetime, timezone, dataclasses (dataclass, field, asdict),
+#   typing (Dict, Any, List, Tuple, Set, Optional, Union, Callable, Pattern)
+#
+# REPRODUCIBILITY NOTES:
+#   1. GPT-5 stochasticity (FATAL): temp=1.0, no seed. Exact reproduction
+#      of GPT-5 results is categorically impossible regardless of SDK version.
+#   2. Model version drift (HIGH): No snapshot IDs in the paper. Provider
+#      checkpoint updates alter outputs at temp=0, independent of stochasticity.
+#   3. Yahoo Finance revision (HIGH): Adj Close retroactively revised.
+#      Archive raw CSV with download timestamp. Verify B&H Sharpe targets:
+#      SR_dotcom≈0.65, SR_GFC≈0.02, SR_combined≈0.35 (±0.02 tolerance).
+#   4. Shiller EPS revision (MEDIUM): Earnings column periodically revised.
+#      Archive raw Excel workbook at access time. Citation: Accessed May 2025.
+# ==============================================================================
