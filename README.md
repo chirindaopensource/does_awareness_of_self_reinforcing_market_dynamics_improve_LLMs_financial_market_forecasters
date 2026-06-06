@@ -57,7 +57,7 @@ Below is a diagram which summarizes the proposed approach:
 
 
 <div align="center">
-  <img src="https://github.com/chirindaopensource/does_awareness_of_self_reinforcing_market_dynamics_improve_LLMs_financial_market_forecasters/blob/main/does_awareness_of_self_reinforcing_market_dynamics_improve_LLMs_financial_market_forecasters_ipo_main.png" alt="Pipeline Architecture" width="100%">
+  <img src="https://github.com/chirindaopensource/does_awareness_of_self_reinforcing_market_dynamics_improve_LLMs_financial_market_forecasters/blob/main/does_awareness_of_self_reinforcing_market_dynamics_improve_LLMs_financial_market_forecasters_ipo_main_4.png" alt="Pipeline Architecture" width="100%">
 </div>
 
 ## Features
