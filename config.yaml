@@ -1,0 +1,1689 @@
+# ==============================================================================
+# config.yaml
+# ==============================================================================
+# Paper   : "Reflexivity as Prompt: Does Awareness of Self-Reinforcing Market
+#            Dynamics Improve LLMs as Financial Market Forecasters?"
+# Author  : Eugene Park (ewp@mit.edu), MIT
+# arXiv   : arXiv:2606.00061v1 [q-fin.ST], submitted 19 May 2026
+# Preprint: June 2, 2026
+# ==============================================================================
+# PROVENANCE LEGEND (applies to all values below)
+#   VERBATIM  : Directly quoted from the paper without alteration.
+#   DERIVED   : Mathematically or logically implied by verbatim statements.
+#   INFERRED  : Gap-filled; the paper is silent. Rationale stated in comment.
+# ==============================================================================
+# YAML CONVENTIONS USED IN THIS FILE
+#   - All null values use the YAML literal: null
+#   - All boolean values use lowercase YAML literals: true / false
+#   - All integer values are unquoted: 288
+#   - All float values are unquoted: 0.65
+#   - Strings containing special characters are single-quoted: 'P_t'
+#   - Multi-line strings use the YAML literal block scalar (|)
+#   - Inline comments (# ...) document provenance for every field
+#   - API keys are environment-variable references resolved at runtime;
+#     the placeholder strings here must NEVER be hardcoded with real keys.
+#   - Fields that require runtime computation (e.g. sqrt(12)) are stored
+#     as their pre-computed float64 values to avoid YAML-parser dependency
+#     on math libraries.  The derivation is recorded in the comment.
+# ==============================================================================
+
+# ==============================================================================
+# SECTION 1 — PAPER AND REPOSITORY METADATA
+# ==============================================================================
+
+paper_metadata:
+
+  # str. VERBATIM, Page 1 title.
+  title: "Reflexivity as Prompt: Does Awareness of Self-Reinforcing Market Dynamics Improve LLMs as Financial Market Forecasters?"
+
+  # str. VERBATIM, Page 1.
+  author: "Eugene Park"
+
+  # str. VERBATIM, footnote 1, Page 1.
+  institution: "Massachusetts Institute of Technology"
+
+  # str. VERBATIM, footnote 1, Page 1.
+  contact_email: "ewp@mit.edu"
+
+  # str. VERBATIM, Page 1 footer.
+  arxiv_id: "arXiv:2606.00061v1"
+
+  # str. DERIVED from arXiv ID.
+  arxiv_url: "https://arxiv.org/abs/2606.00061"
+
+  # str. VERBATIM: "[q-fin.ST]" — Quantitative Finance, Statistical Finance.
+  arxiv_subject: "q-fin.ST"
+
+  # str. VERBATIM, Page 1 footer: "19 May 2026".
+  submission_date: "2026-05-19"
+
+  # str. VERBATIM, Page 1: "Preprint. June 2, 2026."
+  preprint_date: "2026-06-02"
+
+  # null. CONFIRMED ABSENCE: A complete pass through all eight pages
+  # (body, appendices, footnotes, references, captions) finds NO GitHub
+  # URL, code repository, supplementary material, or data archive link.
+  github_repository: null
+
+
+# ==============================================================================
+# SECTION 2 — RAW DATA STRUCTURE SCHEMAS
+# These schemas define the structure of the two raw unprocessed input
+# DataFrames.  No transformation has been applied to these structures.
+# ==============================================================================
+
+raw_data_schemas:
+
+  # ----------------------------------------------------------------------------
+  # df_yahoo_raw — S&P 500 Monthly Adjusted Closing Prices
+  # SOURCE : Yahoo Finance, Ticker ^GSPC, downloaded as CSV.
+  # CONSUMED BY: Phase 1 (acquisition), Phase 3 (NORMALIZE via
+  #              Adj Close column P_t), Phase 8 (realized returns).
+  # ----------------------------------------------------------------------------
+  df_yahoo_raw:
+
+    # str. Source: Section 3, "Data", Page 2 VERBATIM.
+    description: "Raw unmodified CSV download from Yahoo Finance for ticker ^GSPC at monthly frequency. Spans January 1986 to December 2009 (288 rows). Only the Adj Close column is consumed by the study. All other columns are noise from the study perspective but are present in the raw download."
+
+    # str. VERBATIM, Section 3.
+    source: "Yahoo Finance"
+
+    # str. INFERRED: Standard Yahoo Finance ticker for S&P 500.
+    # Not stated explicitly; implied by "S&P 500 index."
+    ticker: "^GSPC"
+
+    # str. VERBATIM: "monthly adjusted closing prices."
+    frequency: "monthly"
+
+    # str. INFERRED: Yahoo Finance base URL.
+    download_url: "https://finance.yahoo.com"
+
+    # null. CRITICAL ABSENCE: Paper does not record download date.
+    # Yahoo Finance retroactively revises Adj Close values —
+    # MUST be populated and archived at experiment execution time.
+    download_date: null
+
+    # int. DERIVED: January 1986 through December 2009 = 288 months.
+    n_rows: 288
+
+    # bool. DERIVED: Yahoo Finance retroactively revises Adj Close
+    # upon new dividend / split events.  The series is NOT versioned.
+    is_version_stable: false
+
+    columns:
+
+      Date:
+        # str (raw CSV).  Cast to datetime64[ns] after loading.
+        # Yahoo Finance timestamps monthly data to the last trading day
+        # of each calendar month (e.g., 1986-01-31).
+        # INFERRED: not the last calendar day, but the last trading day —
+        # these differ when month-end falls on a weekend or holiday.
+        dtype: "object"
+        # bool. Discarded by Phase 3 Step 3.6 (date anonymization).
+        used_in_study: false
+        role: "temporal_ordering_and_alignment_only"
+        example_values:
+          - "1986-01-31"
+          - "1986-02-28"
+          - "1986-03-31"
+          - "1986-04-30"
+          - "1986-05-30"
+
+      Open:
+        # float64.
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: "S&P 500 index level at the first tick of the first trading day of the month."
+        example_values: [209.59, 211.28, 226.92, 238.90, 235.52]
+
+      High:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: "Intra-month maximum S&P 500 index level."
+        example_values: [212.51, 226.95, 238.89, 241.08, 250.44]
+
+      Low:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: "Intra-month minimum S&P 500 index level."
+        example_values: [205.15, 211.08, 226.54, 228.21, 235.49]
+
+      Close:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: >
+          Unadjusted closing index level on the last trading day of the
+          month.  For ^GSPC (a price return index), this equals Adj Close
+          because the index does not distribute dividends and no split
+          adjustments apply.
+        example_values: [211.28, 226.92, 238.90, 235.52, 247.35]
+
+      Adj_Close:
+        # The YAML key uses underscore because the literal CSV header
+        # "Adj Close" (with a space) cannot be a bare YAML mapping key.
+        # The actual DataFrame column must be accessed as df["Adj Close"].
+        column_header_in_csv: "Adj Close"
+        dtype: "float64"
+        # bool. THIS IS P_t.
+        used_in_study: true
+        role: "primary_input_P_t"
+        variable_name_in_paper: "P_t"
+        description: >
+          Monthly adjusted closing price for the S&P 500.  THIS IS P_t.
+          Used in normalization formulas N1 and N2 (as the shared base
+          P_0 = P_{t_0}), and in the realized return formula
+          r_tau = (P_{t0+W} - P_{t0+W-1}) / P_{t0+W-1}.
+          For ^GSPC, Adj Close equals Close because it is a price return
+          index.  CRITICAL: Yahoo Finance retroactively revises this
+          column — exact values are download-date-dependent.
+        example_values: [211.28, 226.92, 238.90, 235.52, 247.35]
+        # float. First row (January 1986).  Approximate.
+        value_at_t1: 211.28
+        # float. Last row (December 2009).  Approximate.
+        value_at_t288: 1115.10
+        key_episode_values:
+          # float. Dot-com episode start.  Approximate.
+          t121_jan1996: 636.02
+          # float. Dot-com episode end.  Approximate.
+          t192_dec2001: 1148.08
+          # float. GFC episode start.  Approximate.
+          t217_jan2004: 1131.13
+          # float. GFC episode end.  Approximate.
+          t288_dec2009: 1115.10
+
+      Volume:
+        # int64.  NOTE: may be NaN for some index tickers; degrades to
+        # float64 in that case.  INFERRED handling.
+        dtype: "int64"
+        used_in_study: false
+        role: "noise"
+        description: "Monthly trading volume."
+        example_values: [148200000, 174900000, 182100000, 159300000, 167800000]
+
+    # List[dict]. 5 example rows from the dot-com W=36 tau=1 context
+    # window (Jan 1993 context start = t_0=85 to Dec 1995 = t_0+35=120).
+    # All values are approximate based on known market history.
+    example_rows:
+      - Date: "1993-01-29"
+        Open: 434.99
+        High: 437.88
+        Low: 432.41
+        Close: 435.71
+        Adj Close: 435.71
+        Volume: 94200000
+      - Date: "1993-02-26"
+        Open: 435.71
+        High: 444.65
+        Low: 432.33
+        Close: 443.38
+        Adj Close: 443.38
+        Volume: 88400000
+      - Date: "1993-03-31"
+        Open: 443.38
+        High: 453.52
+        Low: 440.12
+        Close: 451.67
+        Adj Close: 451.67
+        Volume: 96700000
+      - Date: "1993-04-30"
+        Open: 451.67
+        High: 455.73
+        Low: 436.82
+        Close: 440.19
+        Adj Close: 440.19
+        Volume: 89300000
+      - Date: "1995-12-29"
+        Open: 605.37
+        High: 621.69
+        Low: 603.73
+        Close: 615.93
+        Adj Close: 615.93
+        Volume: 102700000
+
+  # ----------------------------------------------------------------------------
+  # df_shiller_raw — Shiller S&P 500 Monthly Data and CAPE Ratio
+  # SOURCE : Robert Shiller, http://www.econ.yale.edu/~shiller/data.htm
+  # CITATION: Shiller, R.J. (2025). Accessed May 2025.
+  # CONSUMED BY: Phase 1 (acquisition), Phase 3 (NORMALIZE via
+  #              Earnings column EPS_t).
+  # ----------------------------------------------------------------------------
+  df_shiller_raw:
+
+    description: >
+      Raw Excel worksheet extracted from Shiller's
+      'U.S. Stock Markets 1871-Present and CAPE Ratio' workbook.
+      The full file spans January 1871 onward; the study uses
+      January 1986 through December 2009 (288 rows).  Only the
+      Earnings column is consumed.  All other columns are noise
+      from the study's perspective.
+
+    # str. VERBATIM, Section 3.
+    source_name: "Robert Shiller"
+
+    # str. INFERRED: Standard workbook title.
+    dataset_title: "U.S. Stock Markets 1871-Present and CAPE Ratio"
+
+    # str. VERBATIM, References section, Page 5.
+    access_url: "http://www.econ.yale.edu/~shiller/data.htm"
+
+    # str. VERBATIM: "Accessed May 2025."
+    access_date: "2025-05"
+
+    # str. VERBATIM, References section, Page 5.
+    formal_citation: >
+      Shiller, R. J. Online data: U.S. stock markets 1871-present and
+      CAPE ratio. http://www.econ.yale.edu/~shiller/data.htm, 2025.
+      Accessed May 2025.
+
+    # str. DERIVED from in-text citation "(Shiller, 2025)."
+    citation_key: "Shiller2025"
+
+    # str. INFERRED: Shiller distributes the dataset as .xls/.xlsx.
+    file_format: "Excel"
+
+    # bool. DERIVED: Shiller periodically revises historical EPS.
+    # No file hash or version ID is provided in the paper.
+    is_version_stable: false
+
+    # int. DERIVED: January 1986 through December 2009.
+    n_rows: 288
+
+    columns:
+
+      Date:
+        dtype: "float64"
+        used_in_study: false
+        role: "temporal_ordering_and_alignment_only"
+        description: >
+          Decimal-year timestamp.  Formula: Date = year + (month - 1) / 12.
+          e.g. 1986.00 = Jan 1986, 1986.08 ≈ Feb 1986, 1986.17 ≈ Mar 1986.
+          Must be converted to calendar dates before alignment with
+          df_yahoo_raw.  Discarded by Phase 3 date anonymization.
+        # str. INFERRED: Inverse of Shiller's decimal-year scheme.
+        conversion_formula: "month = round((Date - floor(Date)) * 12) + 1"
+        example_values: [1993.00, 1993.08, 1993.17, 1993.25, 1995.92]
+
+      Price:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: >
+          Shiller S&P Composite monthly price.  Approximately consistent
+          with Yahoo Finance Adj Close but may differ due to source
+          methodology.  NOT used — the study uses Yahoo Finance Adj Close
+          for P_t.
+        example_values: [435.71, 443.38, 451.67, 440.19, 615.93]
+
+      Dividend:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: >
+          Trailing twelve-month S&P 500 dividends per share (annualized).
+          NOT used — the study uses only price returns, implicitly assuming
+          zero dividend yield in the realized return formula.
+        example_values: [12.02, 12.07, 12.11, 12.18, 14.11]
+
+      Earnings:
+        dtype: "float64"
+        # bool. THIS IS EPS_t.
+        used_in_study: true
+        role: "primary_input_EPS_t"
+        variable_name_in_paper: "EPS_t"
+        description: >
+          Trailing twelve-month earnings per share for the S&P 500
+          Composite (annualized dollars).  THIS IS EPS_t.  Used in
+          normalization formula N2: EPS'_k = 100 * EPS_{t0+k-1} / P_0,
+          where P_0 is the Yahoo Finance price (NOT the Shiller price).
+          The shared divisor P_0 preserves the true P/E ratio.
+          CRITICAL: Shiller periodically revises historical Earnings
+          values — exact values are access-date-dependent.
+        # str. VERBATIM.
+        source: "VERBATIM: 'monthly trailing twelve-month earnings-per-share (EPS) from Robert Shiller's publicly available dataset (Shiller, 2025).'"
+        example_values: [19.43, 19.55, 19.70, 20.05, 33.20]
+        # float. Approx. EPS at t_0=85 (dot-com W=36 tau=1 start).
+        value_at_jan1993: 19.43
+        # float. Approx. EPS at context window end (k=36).
+        value_at_dec1995: 33.20
+        key_episode_values:
+          t121_jan1996: 34.11
+          t192_dec2001: 36.84
+          t217_jan2004: 54.22
+          t288_dec2009: 56.86
+
+      CPI:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: >
+          Consumer Price Index.  Used by Shiller to deflate nominal series
+          to real terms.  NOT used — the study works entirely in nominal
+          terms.  Using real EPS instead of nominal EPS would corrupt the
+          P/E ratio because P_t is nominal.
+        example_values: [404.07, 404.83, 405.58, 406.17, 423.16]
+
+      Long_Rate:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: "10-year U.S. Treasury yield (percent, annualized). NOT used. No risk-free rate appears in any formula."
+        example_values: [6.59, 6.50, 6.47, 6.63, 5.71]
+
+      Real_Price:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: "CPI-deflated S&P Composite price. NOT used."
+        example_values: [3702.83, 3762.68, 3830.77, 3729.88, 5175.74]
+
+      Real_Dividend:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: "CPI-deflated dividend series. NOT used."
+        example_values: [102.12, 102.48, 102.79, 103.29, 118.51]
+
+      Real_Earnings:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: >
+          CPI-deflated trailing twelve-month earnings.  NOT used.
+          Must NOT substitute for Earnings column —
+          P_t (nominal) / Real_Earnings (real) != true P/E.
+        example_values: [165.07, 165.98, 167.25, 169.97, 278.95]
+
+      CAPE:
+        dtype: "float64"
+        used_in_study: false
+        role: "noise"
+        description: >
+          Cyclically Adjusted Price-to-Earnings (Shiller P/E10).
+          NOT used.  The study constructs its own trailing P/E from the
+          normalized series at each rolling step as P'_k / EPS'_k.
+          CAPE (ten-year smoothed) is a structurally different quantity.
+        example_values: [21.28, 21.56, 21.86, 22.06, 28.72]
+
+    # List[dict]. 5 rows from the dot-com W=36 tau=1 window.
+    # Row 1 = t_0 = 85 = Jan 1993.  Row 5 = context window end (k=36).
+    # All values approximate.
+    example_rows:
+      - Date: 1993.00
+        Price: 435.71
+        Dividend: 12.02
+        Earnings: 19.43
+        CPI: 404.07
+        Long_Rate: 6.59
+        Real_Price: 3702.83
+        Real_Dividend: 102.12
+        Real_Earnings: 165.07
+        CAPE: 21.28
+      - Date: 1993.08
+        Price: 443.38
+        Dividend: 12.07
+        Earnings: 19.55
+        CPI: 404.83
+        Long_Rate: 6.50
+        Real_Price: 3762.68
+        Real_Dividend: 102.48
+        Real_Earnings: 165.98
+        CAPE: 21.56
+      - Date: 1993.17
+        Price: 451.67
+        Dividend: 12.11
+        Earnings: 19.70
+        CPI: 405.58
+        Long_Rate: 6.47
+        Real_Price: 3830.77
+        Real_Dividend: 102.79
+        Real_Earnings: 167.25
+        CAPE: 21.86
+      - Date: 1993.25
+        Price: 440.19
+        Dividend: 12.18
+        Earnings: 20.05
+        CPI: 406.17
+        Long_Rate: 6.63
+        Real_Price: 3729.88
+        Real_Dividend: 103.29
+        Real_Earnings: 169.97
+        CAPE: 22.06
+      - Date: 1995.92
+        Price: 615.93
+        Dividend: 14.11
+        Earnings: 33.20
+        CPI: 423.16
+        Long_Rate: 5.71
+        Real_Price: 5175.74
+        Real_Dividend: 118.51
+        Real_Earnings: 278.95
+        CAPE: 28.72
+
+
+# ==============================================================================
+# SECTION 3 — DATA PROVENANCE AND ACQUISITION PARAMETERS
+# ==============================================================================
+
+data_provenance:
+
+  # ----------------------------------------------------------------------------
+  # DATA SOURCE: PRICE SERIES
+  # SOURCE: Section 3, "Data", Page 2 VERBATIM.
+  # ----------------------------------------------------------------------------
+  price_series:
+
+    # str. Mathematical symbol used in the paper.
+    variable_name: "P_t"
+
+    # str. VERBATIM, Section 3.
+    source_name: "Yahoo Finance"
+
+    # str. INFERRED: Standard Yahoo Finance ticker for the S&P 500.
+    ticker: "^GSPC"
+
+    # str. VERBATIM: "monthly adjusted closing prices."
+    column_name: "Adj Close"
+
+    # str. VERBATIM.
+    frequency: "monthly"
+
+    # str. VERBATIM: "beginning January 1986."
+    start_date: "1986-01-31"
+
+    # str. DERIVED: GFC episode ends December 2009.
+    end_date: "2009-12-31"
+
+    # int. DERIVED: 288 months.
+    n_observations: 288
+
+    # str. INFERRED.
+    download_url: "https://finance.yahoo.com"
+
+    # null. CRITICAL ABSENCE — populate at execution time.
+    download_date: null
+
+    # bool. DERIVED: Adj Close is retroactively revised.
+    is_version_stable: false
+
+    # null. No bibliographic reference entry in the paper.
+    formal_citation: null
+
+    calibration_bah_sharpe:
+      # float. VERBATIM, Table 3 caption.
+      dotcom: 0.65
+      # float. VERBATIM, Table 3 caption.
+      gfc: 0.02
+      # float. VERBATIM, Appendix B and Table 3 caption.
+      # PRIMARY DATA VERSION VERIFICATION TARGET.
+      combined: 0.35
+
+  # ----------------------------------------------------------------------------
+  # DATA SOURCE: EPS SERIES
+  # SOURCE: Section 3, "Data", Page 2 and References, Page 5 VERBATIM.
+  # ----------------------------------------------------------------------------
+  eps_series:
+
+    # str. Mathematical symbol used in the paper.
+    variable_name: "EPS_t"
+
+    # str. VERBATIM.
+    source_name: "Robert Shiller"
+
+    # str. INFERRED: Standard workbook title.
+    dataset_title: "U.S. Stock Markets 1871-Present and CAPE Ratio"
+
+    # str. VERBATIM, References.
+    access_url: "http://www.econ.yale.edu/~shiller/data.htm"
+
+    # str. INFERRED: Standard column label in the Excel workbook.
+    column_name: "Earnings"
+
+    # str. VERBATIM: "monthly trailing twelve-month earnings-per-share."
+    earnings_type: "trailing_twelve_month"
+
+    # str. VERBATIM.
+    frequency: "monthly"
+
+    # str. VERBATIM.
+    start_date: "1986-01-31"
+
+    # str. DERIVED.
+    end_date: "2009-12-31"
+
+    # int. DERIVED.
+    n_observations: 288
+
+    # str. VERBATIM: "Accessed May 2025."
+    access_date: "2025-05"
+
+    # str. VERBATIM, References, Page 5.
+    formal_citation: >
+      Shiller, R. J. Online data: U.S. stock markets 1871-present and
+      CAPE ratio. http://www.econ.yale.edu/~shiller/data.htm, 2025.
+      Accessed May 2025.
+
+    # str. DERIVED from "(Shiller, 2025)" in-text.
+    citation_key: "Shiller2025"
+
+    # str. INFERRED.
+    file_format: "Excel"
+
+    # str. INFERRED: e.g. 1986.00 = Jan 1986.
+    date_format_in_file: "decimal_year"
+
+    # bool. DERIVED: Historical EPS periodically revised.
+    is_version_stable: false
+
+  # ----------------------------------------------------------------------------
+  # ALIGNMENT PARAMETERS
+  # INFERRED from the requirement of simultaneous P_t and EPS_t.
+  # ----------------------------------------------------------------------------
+  alignment:
+
+    # str. INFERRED: Align both series to last calendar day of each month
+    # (e.g., 2009-12-31) as a common key.
+    target_timestamp_convention: "month_end"
+
+    # str. INFERRED: Yahoo Finance uses last trading day of month.
+    yahoo_timestamp_type: "last_trading_day"
+
+    # str. INFERRED: Requires conversion before alignment.
+    shiller_timestamp_type: "decimal_year"
+
+    # str. INFERRED: Inverse of Shiller decimal-year convention.
+    shiller_to_calendar_formula: "month = round((Date - floor(Date)) * 12) + 1; year = int(floor(Date))"
+
+    # int. DERIVED: January 1986 through December 2009 = 288 months.
+    n_aligned_rows: 288
+
+    # int. INFERRED: Zero missing values allowed in either series across
+    # the full 288-row span before normalization proceeds.
+    missing_value_tolerance: 0
+
+
+# ==============================================================================
+# SECTION 4 — NORMALIZATION AND ANONYMIZATION PARAMETERS
+# ==============================================================================
+
+normalization_params:
+
+  # str. VERBATIM algebraic form.
+  # N1: P'_k  = 100 * P_{t0+k-1} / P_0
+  # SOURCE: Section 3, "Normalization and knowledge-cutoff treatment",
+  #         Page 3 VERBATIM.
+  eq_N1_formula: "P_prime_k = 100 * P[t0 + k - 1] / P_0"
+
+  # str. VERBATIM algebraic form.
+  # N2: EPS'_k = 100 * EPS_{t0+k-1} / P_0
+  eq_N2_formula: "EPS_prime_k = 100 * EPS[t0 + k - 1] / P_0"
+
+  # int. VERBATIM: "100 *" in both formulas.
+  # Ensures P'_1 ≡ 100.00 by construction (k=1 → P_{t0}/P_0 = 1).
+  scale_factor: 100
+
+  # str. VERBATIM: "Let P_0 denote the price at the first month of
+  # the context window."
+  base_price_symbol: "P_0"
+
+  # str. VERBATIM.
+  base_price_selection_rule: "first_month_of_context_window"
+
+  # int. DERIVED: P_0 = P_{t_0 + 0}.  Offset from window start is zero.
+  base_price_offset: 0
+
+  # bool. VERBATIM: "both divided by the same base price."
+  # CRITICAL: Both P' and EPS' use P_0 (not EPS_{t_0}) as divisor.
+  # This shared scalar cancels in the ratio, preserving P/E exactly.
+  base_is_shared_divisor: true
+
+  # str. VERBATIM: "P'_t/EPS'_t = P_t/EPS_t and the true P/E ratio
+  # is preserved exactly."
+  pe_preservation_identity: "P_prime_k / EPS_prime_k = (100 * P_k / P_0) / (100 * EPS_k / P_0) = P_k / EPS_k"
+
+  # bool. VERBATIM.
+  pe_ratio_preserved: true
+
+  # bool. INFERRED: t_0 advances by 1 month at each tau, so P_0 is
+  # recomputed at every rolling evaluation step.  The same historical
+  # price appears at different normalized values across different steps.
+  renormalize_each_step: true
+
+  # int. INFERRED: Context window advances 1 month per step.
+  window_slide_increment: 1
+
+  # str. INFERRED: Only formula consistent with n=72 for both W ∈ {36,60}.
+  t0_formula: "t_0(tau) = tau_ep_start - W + tau - 1"
+
+  # int. VERBATIM (implied): "t = 1 (oldest)."
+  tau_first: 1
+
+  # int. VERBATIM: "n = 72 per episode cell."
+  tau_last: 72
+
+  # int. VERBATIM: "forecast for the NEXT monthly close."
+  forecast_horizon_months: 1
+
+  # DERIVED from t0_formula above.
+  window_boundaries:
+
+    dotcom_W36:
+      t0_tau1: 85          # Jan 1993
+      t0_tau72: 156         # Dec 1998
+      forecast_last_target: 192  # Dec 2001 = dotcom t_end ✓
+
+    dotcom_W60:
+      t0_tau1: 61          # Jan 1991
+      t0_tau72: 132         # Dec 1996
+      forecast_last_target: 192  # Dec 2001 ✓
+
+    gfc_W36:
+      t0_tau1: 181         # Jan 2001
+      t0_tau72: 252         # Dec 2006
+      forecast_last_target: 288  # Dec 2009 = dataset end ✓
+
+    gfc_W60:
+      t0_tau1: 157         # Jan 1999
+      t0_tau72: 228         # Dec 2004
+      forecast_last_target: 288  # Dec 2009 ✓
+
+  # int. DERIVED.  All four boundary forecasts ≤ 288.
+  dataset_total_rows: 288
+
+  # int. INFERRED: 2 decimal places for normalized values in user message.
+  serialization_decimal_places: 2
+
+  anonymization:
+
+    # str. INFERRED: Must not appear in any model input.
+    index_original_name: "S&P 500"
+
+    # str. VERBATIM: "the index is labeled 'equity market index'."
+    index_replacement_name: "equity market index"
+
+    # str. INFERRED: Format in the aligned dataset.
+    date_format_original: "YYYY-MM-DD"
+
+    # str. VERBATIM: "Dates are replaced by t = 1, ..., T."
+    date_replacement_format: "integer_sequence"
+
+    # int. VERBATIM: t=1 for the oldest observation in the window.
+    date_sequence_start: 1
+
+    # str. VERBATIM: T = W (context window length).
+    date_sequence_end_variable: "W"
+
+    # List[str]. DERIVED from VERBATIM: "removing all absolute level
+    # and calendar information."
+    calendar_info_suppressed:
+      - "year"
+      - "month"
+      - "day"
+      - "quarter"
+      - "season"
+      - "decade"
+
+    # bool. VERBATIM.
+    absolute_price_level_suppressed: true
+
+    # bool. INFERRED: "^GSPC" must not appear.
+    ticker_symbol_suppressed: true
+
+    # bool. INFERRED: "dot-com," "GFC" must not appear.
+    episode_name_suppressed: true
+
+    # str. VERBATIM: "To guard against retrieval of memorized outcomes,
+    # all inputs are normalized using a shared base."
+    anti_memorization_method: "level_normalization_plus_anonymization"
+
+    # bool. INFERRED / LIMITATION: Normalization removes absolute levels
+    # but PRESERVES the shape of the P/E trajectory.  A model trained on
+    # financial history may recognize the dot-com arc by shape alone.
+    # This risk is NOT addressed in the paper.
+    shape_memorization_risk: true
+
+
+# ==============================================================================
+# SECTION 5 — PROMPT BLOCKS AND TASK TEMPLATES
+# ==============================================================================
+# NOTE ON MULTI-LINE STRINGS IN THIS SECTION
+# All prompt blocks are stored using YAML literal block scalars (|).
+# The leading and trailing blank lines are stripped at load time by
+# standard YAML parsers.  The internal newlines within each block are
+# significant and must be preserved exactly as written to reproduce the
+# verbatim block text from Appendix C.
+# ==============================================================================
+
+prompt_blocks:
+
+  # PROVENANCE: VERBATIM, Appendix C, Page 7.
+  # CONDITIONS: A, B, C, D (Table 2, Appendix A).
+  # SIZE: ~0.25 kB.
+  block_1_role_price: |
+    You are an expert financial analyst examining a normalized price index for an equity market.
+    You will receive a monthly time series indexed t=1 (oldest) to t=T (most recent), where the price is normalized to 100 at t=1.
+
+  # PROVENANCE: VERBATIM, Appendix C, Page 7.
+  # CONDITIONS: B, C, D ONLY.  ABSENT from A.
+  # SIZE: ~0.15 kB.
+  # CRITICAL: Mandates column names "PRICE INDEX" and "EPS INDEX"
+  #           verbatim in the user message serialization.
+  block_2_eps: |
+    You also receive an earnings-per-share (EPS) index for the same market. Both the price index and the EPS index are divided by the same base value (the price at t=1), so their ratio at any point equals the true P/E ratio:
+
+    P/E at t = PRICE INDEX[t] / EPS INDEX[t]
+
+  # PROVENANCE: VERBATIM, Appendix C, Pages 7-8.
+  # CONDITIONS: A, B, C, D (Table 2, Appendix A).
+  # SIZE: ~0.85 kB.
+  # QUANTITATIVE THRESHOLD: "at least 5%" for Stage 3 (Testing).
+  # NOTE: Present even in Condition A — model must infer P/E dynamics
+  #       from price alone (no EPS provided in A).
+  block_3_stage_definitions: |
+    Stage 1 | Unrecognized. A genuine improvement in fundamentals begins. EPS is growing. Price starts to rise and outpace EPS slightly, but the divergence is small and goes unrecognized by most participants. The P/E ratio is near or just below its long-run mean.
+
+    Stage 2 | InitialPhase. The trend becomes recognized and the recognition reinforces it. Price-EPS divergence begins to widen. The P/E ratio rises above its long-run mean. Not yet far-from-equilibrium --- the self-reinforcing loop is engaging but has not accelerated.
+
+    Stage 3 | Testing. A price correction pulls back at least 5% from a recent peak. EPS continues to grow --- this is a price-only correction. If price recovers to a new high, the trend emerges strengthened. Identified retrospectively; two test periods may occur.
+
+    Stage 4 | Acceleration. The P/E ratio is clearly elevated above its long-run mean and rising. EPS is still growing but price has moved far ahead of fundamentals. The self-reinforcing loop is at its most powerful. Ends at the price peak --- the moment of truth --- after which price can no longer be sustained.
+
+    Stage 5 | Twilight. Price has reversed from its peak and is falling or flattening. Critical signal: EPS has NOT yet started declining. The trend may be sustained by inertia but ceases to be reinforced by belief.
+
+    Stage 6 | Crash. The falling price feeds back into fundamentals --- EPS begins to decline. Both price and EPS are now falling in a self-reinforcing bust loop. The cycle's characteristic rapid collapse occurs here.
+
+    Stage 7 | Recovery. The bust has run its course. Price begins recovering but EPS may still be declining. Mirrors Stage 1: a new uptrend emerges but goes unrecognized by most participants. P/E near or below long-run mean.
+
+    Important: the process may be aborted at any stage. The model describes the complete case; in practice, external shocks may interrupt the sequence.
+
+  # PROVENANCE: VERBATIM, Appendix C, Pages 7-8.
+  # CONDITIONS: C, D ONLY.  ABSENT from A, B.
+  # SIZE: ~0.55 kB.  Addition: ~1.6 kB (B) → ~4.3 kB (C).
+  # CAUTION: Signals overvaluation but provides NO reversal timing →
+  #          implicated in Claude's premature bearish positioning
+  #          (Section 4, Section 5).
+  block_4_reflexivity: |
+    Reflexivity describes a two-way feedback loop between participants' thinking and the situation they are in. In financial markets, participants' biased views drive their actions, and those actions change the very fundamentals they are trying to assess.
+
+    Two functions operate simultaneously:
+
+    Cognitive function (reality -> views): Participants form beliefs about market prices, but the reality they observe has already been shaped by prior beliefs and actions. Their view is always incomplete and biased.
+
+    Participative function (views -> reality): Participants act on their biased views. Buying and selling moves prices. Price movements alter the fundamentals --- a rising price improves a firm's access to capital and strengthens its finances; a falling price does the reverse.
+
+    The prevailing bias is the net gap between prices and what the fundamentals alone would justify, observable as the gap between the actual P/E ratio and its long-run historical mean.
+
+    Keep this theory in mind when examining the data. Use it to interpret what the series signals about the interaction between participants' beliefs and the fundamentals at each point in time.
+
+  # PROVENANCE: VERBATIM, Appendix C, Page 8.
+  # CONDITIONS: D ONLY.  ABSENT from A, B, C.
+  # SIZE: ~1.1 kB.  Addition: ~4.3 kB (C) → ~10.0 kB (D).
+  # PURPOSE: Applies Block 4 mechanism stage-by-stage.  Conveys that
+  #          Acceleration (Stage 4) can persist with upward momentum —
+  #          partially corrects Claude's premature bearish positioning
+  #          induced by Block 4 alone.
+  block_5_stage_reflexivity_map: |
+    Stage 1 | Unrecognized. Cognitive function lags reality: participants attribute the price rise to noise. Participative function is weak. The prevailing bias is nascent; P/E barely moves.
+
+    Stage 2 | InitialPhase. Cognitive function catches up: the trend is recognized. Recognition triggers the participative function --- new buyers push prices higher, improving corporate access to capital, genuinely improving EPS, and validating the higher P/E. The feedback loop is fully engaged.
+
+    Stage 3 | Testing. A shock temporarily disrupts the loop. Most participants' cognitive function still holds the bias intact; EPS continues to grow. The participative function re-engages as buyers return on the dip. If price recovers, the loop emerges strengthened.
+
+    Stage 4 | Acceleration. Cognitive function pushes the bias to an extreme --- the trend feels unshakable. Participative function is at maximum power: higher prices sustain EPS growth and justify ever-higher P/E ratios. The boom builds toward the price peak.
+
+    Stage 5 | Twilight. Price peak is past. Cognitive function begins to crack --- bias ceases to be reinforced by belief. Participative function weakening, but EPS has NOT yet been damaged --- fundamentals still intact even as price falls.
+
+    Stage 6 | Crash. Cognitive function inverts --- extreme pessimism replaces the bias. Participative function operates in reverse: falling prices destroy credit availability, curtail investment, and directly reduce EPS (reflexive fundamental damage). Catastrophic acceleration ensues.
+
+    Stage 7 | Recovery. Prevailing pessimism begins to dissolve. Participative function's destructive impact winds down: depressed prices attract value investors, stabilizing fundamentals at the margin. As in Stage 1, most participants do not yet recognize the new uptrend.
+
+  # PROVENANCE: VERBATIM, Appendix C, Page 8.
+  # CONDITIONS: A, B, C, D.
+  # PURPOSE: Defines 4 output fields.  Only "direction" is consumed
+  #          in downstream metric computation (Tables 1 and 3).
+  output_schema_verbatim: |
+    {
+        "stage": "<Unrecognized | InitialPhase | Testing | Acceleration | Twilight | Crash | Recovery>",
+        "direction": "<up | neutral | down>",
+        "magnitude": "<signed monthly return in %, e.g. +2.1 or -0.8>",
+        "rationale": "<2--3 sentences>"
+    }
+
+  # PROVENANCE: INFERRED from Section 3, "Tasks and metrics", Page 2.
+  # NOTE: Appendix C does NOT reproduce the task instruction prose verbatim.
+  #       These are the most defensible reconstructions.
+  task_instruction_A: |
+    Examine the normalized price series provided. Identify which boom-bust stage the market currently occupies and produce a forecast for the next monthly close. Respond with a single JSON object exactly matching the schema below. Output only the JSON object --- no preamble, no trailing text.
+
+  task_instruction_B: |
+    Examine the normalized price and EPS series provided. Identify which boom-bust stage the market currently occupies and produce a forecast for the next monthly close. Respond with a single JSON object exactly matching the schema below. Output only the JSON object --- no preamble, no trailing text.
+
+  task_instruction_C: |
+    Examine the normalized price and EPS series provided. Using the reflexivity framework, identify which boom-bust stage the market currently occupies and produce a forecast for the next monthly close. Respond with a single JSON object exactly matching the schema below. Output only the JSON object --- no preamble, no trailing text.
+
+  task_instruction_D: |
+    Examine the normalized price and EPS series provided. Using the full reflexivity framework and stage-level mechanism map above, identify which boom-bust stage the market currently occupies and produce a forecast for the next monthly close. Respond with a single JSON object exactly matching the schema below. Output only the JSON object --- no preamble, no trailing text.
+
+  output_field_metadata:
+
+    stage:
+      # List[str]. VERBATIM from output schema.
+      allowed_values:
+        - "Unrecognized"
+        - "InitialPhase"
+        - "Testing"
+        - "Acceleration"
+        - "Twilight"
+        - "Crash"
+        - "Recovery"
+      # int.
+      n_categories: 7
+      # bool. Elicited to force cycle-position reasoning; NOT evaluated
+      # against any ground truth.
+      used_in_metrics: false
+      purpose: "force_cycle_reasoning"
+
+    direction:
+      # List[str]. VERBATIM from output schema.
+      allowed_values:
+        - "up"
+        - "neutral"
+        - "down"
+      # int.
+      n_categories: 3
+      # bool. SOLE field consumed in Tables 1 and 3.
+      used_in_metrics: true
+      purpose: "primary_forecast_field"
+
+    magnitude:
+      # str.
+      allowed_values: "signed_float_percent"
+      # str. VERBATIM example from output schema.
+      example_format: "+2.1 or -0.8"
+      used_in_metrics: false
+      purpose: "calibration_elicitation"
+
+    rationale:
+      allowed_values: "free_text"
+      # str. VERBATIM: "2--3 sentences."
+      n_sentences: "2--3"
+      used_in_metrics: false
+      purpose: "interpretability_logging"
+
+
+# ==============================================================================
+# SECTION 6 — EXPERIMENT DESIGN AND GRID CONFIGURATION
+# ==============================================================================
+
+experiment_config:
+
+  # int. VERBATIM, Section 3, "Models."
+  n_models: 3
+
+  # int. VERBATIM, Section 3, "Prompting conditions."
+  n_conditions: 4
+
+  # int. VERBATIM, Section 3, "Context window."
+  n_context_windows: 2
+
+  # int. VERBATIM, Section 3, "Evaluation episodes."
+  n_episodes: 2
+
+  # int. DERIVED: 3 * 4 * 2 * 2 = 48.
+  n_cells: 48
+
+  # int. VERBATIM: "n = 72 per episode cell."
+  n_eval_months_per_cell: 72
+
+  # int. VERBATIM: "n = 144 combined."
+  n_eval_months_combined: 144
+
+  # int. DERIVED: 48 cells * 72 months = 3,456.
+  total_api_calls: 3456
+
+  # str. VERBATIM: "All experiments use zero-shot prompting."
+  prompting_mode: "zero_shot"
+
+  # List[int]. Units: months.
+  # VERBATIM, Section 3, "Context window", Page 2.
+  context_windows:
+    - 36
+    - 60
+
+  # VERBATIM, Section 3, "Evaluation episodes", Page 2.
+  episodes:
+
+    dotcom:
+      # str. VERBATIM, Tables 1 and 3.
+      label: "Dot-com bubble"
+      # str. VERBATIM: "Jan 1996."
+      start_date: "1996-01-31"
+      # str. VERBATIM: "Dec 2001."
+      end_date: "2001-12-31"
+      # int. DERIVED: 1986-01 = t=1; Jan 1996 = t=121.
+      t_start: 121
+      # int. DERIVED: t_start + 72 - 1 = 192.
+      t_end: 192
+      # int. VERBATIM.
+      n_months: 72
+      # str. VERBATIM characterization.
+      cycle_driver: "equity_PE_expansion"
+      # float. VERBATIM, Table 3 caption. CALIBRATION TARGET.
+      bah_sharpe: 0.65
+      # int. DERIVED: t_0(tau=1, W=36) = 85 → Jan 1993.
+      pre_episode_buffer_W36: 36
+      # int. DERIVED: t_0(tau=1, W=60) = 61 → Jan 1991.
+      pre_episode_buffer_W60: 60
+
+    gfc:
+      # str. VERBATIM, Tables 1 and 3.
+      label: "Global financial crisis"
+      # str. VERBATIM: "Jan 2004."
+      start_date: "2004-01-30"
+      # str. VERBATIM: "Dec 2009."
+      end_date: "2009-12-31"
+      # int. DERIVED: 1986-01 = t=1; Jan 2004 = t=217.
+      t_start: 217
+      # int. DERIVED: 217 + 71 = 288 = dataset final row.
+      t_end: 288
+      # int. VERBATIM.
+      n_months: 72
+      # str. VERBATIM characterization.
+      cycle_driver: "credit_channel_reflexivity"
+      # float. VERBATIM, Table 3 caption. CALIBRATION TARGET.
+      bah_sharpe: 0.02
+      # int. DERIVED: t_0(tau=1, W=36) = 181 → Jan 2001.
+      pre_episode_buffer_W36: 36
+      # int. DERIVED: t_0(tau=1, W=60) = 157 → Jan 1999.
+      pre_episode_buffer_W60: 60
+
+  # float. VERBATIM, Appendix B and Table 3 caption.
+  # PRIMARY CALIBRATION TARGET for data version verification.
+  bah_sharpe_combined: 0.35
+
+  # VERBATIM, Table 2, Appendix A, Page 5.
+  condition_block_map:
+
+    A:
+      block_1: true
+      block_2: false
+      block_3: true
+      block_4: false
+      block_5: false
+      task_schema: true
+      # float. VERBATIM, Table 2 "Approx. size" column.
+      approx_size_kb: 1.5
+
+    B:
+      block_1: true
+      block_2: true
+      block_3: true
+      block_4: false
+      block_5: false
+      task_schema: true
+      approx_size_kb: 1.6
+
+    C:
+      block_1: true
+      block_2: true
+      block_3: true
+      block_4: true
+      block_5: false
+      task_schema: true
+      approx_size_kb: 4.3
+
+    D:
+      block_1: true
+      block_2: true
+      block_3: true
+      block_4: true
+      block_5: true
+      task_schema: true
+      approx_size_kb: 10.0
+
+
+# ==============================================================================
+# SECTION 7 — LLM API CONFIGURATION
+# ==============================================================================
+# SECURITY NOTE: API keys are stored as environment-variable reference
+# strings here.  They MUST be resolved at runtime via os.environ.get().
+# NEVER hardcode real API key values in this file.
+# Set the following environment variables before running the pipeline:
+#   OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY
+# ==============================================================================
+
+llm_api_config:
+
+  api_keys:
+    # str. INFERRED.  Resolved at runtime from environment variable.
+    openai: "${OPENAI_API_KEY}"
+    # str. INFERRED.  Resolved at runtime from environment variable.
+    anthropic: "${ANTHROPIC_API_KEY}"
+    # str. INFERRED.  Resolved at runtime from environment variable.
+    google: "${GOOGLE_API_KEY}"
+
+  # ----------------------------------------------------------------------------
+  # GPT-5 CONFIGURATION
+  # SOURCE: Section 3, "Models", Pages 2-3.  Name and temperature VERBATIM.
+  # API model string: confirmed via platform.openai.com/docs/models/gpt-5
+  # Release date: August 7, 2025.
+  # ----------------------------------------------------------------------------
+  gpt5:
+
+    # str. VERBATIM, Section 3, "Models."
+    display_name: "GPT-5"
+
+    # str. DERIVED.
+    provider: "OpenAI"
+
+    # str. CONFIRMED: platform.openai.com/docs/models/gpt-5
+    # NOTE: Paper provides NO version string.  "gpt-5" is the canonical
+    # stable alias.  Snapshots (e.g., "gpt-5-2025-08-07") may be needed
+    # for reproducibility at a future date.
+    api_model_id: "gpt-5"
+
+    # null. CRITICAL ABSENCE: Paper provides no dated snapshot string.
+    api_version_string: null
+
+    # float. VERBATIM: "GPT-5 (temperature = 1, the API default;
+    # adjustment is not permitted)."
+    temperature: 1.0
+
+    # bool. VERBATIM: "adjustment is not permitted."
+    # SOLE model for which temperature cannot be set to 0.
+    temperature_is_adjustable: false
+
+    # null. CRITICAL ABSENCE: No seed.  temp=1.0 + no seed →
+    # every call is a fresh stochastic draw.  GPT-5 results are
+    # irreproducible by construction under the paper's specification.
+    seed: null
+
+    # bool. DERIVED: temp=1.0 + no seed → stochastic.
+    deterministic: false
+
+    # int. INFERRED: Sufficient for 4-field JSON + 2-3 sentence rationale.
+    # Paper specifies no token limit.
+    max_tokens: 512
+
+    # str. INFERRED: Standard OpenAI Chat Completions API.
+    api_message_format: "openai_chat_completions"
+
+    # str. INFERRED: OpenAI Chat Completions API role label.
+    system_role_key: "system"
+
+    # str. INFERRED: OpenAI Chat Completions API role label.
+    user_role_key: "user"
+
+    # int. INFERRED: Single-run point estimates; no variance reported.
+    n_runs_reported: 1
+
+    # str. INFERRED: Standard OpenAI Chat Completions endpoint.
+    api_endpoint: "https://api.openai.com/v1/chat/completions"
+
+    # str. INFERRED: pip install openai
+    sdk_package: "openai"
+
+    # str. INFERRED: Documents the call structure for this provider.
+    call_structure_note: "[INFERRED] messages=[{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': time_series}]"
+
+  # ----------------------------------------------------------------------------
+  # CLAUDE SONNET 4.6 CONFIGURATION
+  # SOURCE: Section 3, "Models", Pages 2-3.  Name and temperature VERBATIM.
+  # API model string: confirmed via docs.anthropic.com model IDs page.
+  # "For the 4.6 generation and later, the dateless ID is the canonical
+  #  model ID for that release." — Anthropic docs.
+  # Release date: February 17, 2026.
+  # ----------------------------------------------------------------------------
+  claude_sonnet_4_6:
+
+    # str. VERBATIM, Section 3, "Models."
+    display_name: "Claude Sonnet 4.6"
+
+    # str. DERIVED.
+    provider: "Anthropic"
+
+    # str. CONFIRMED: docs.anthropic.com model IDs and versioning.
+    # For the 4.6 generation, the dateless ID is canonical and maps to a
+    # single fixed snapshot.  No date suffix required.
+    api_model_id: "claude-sonnet-4-6"
+
+    # str. Same as api_model_id for 4.6+ generation.
+    api_version_string: "claude-sonnet-4-6"
+
+    # int. VERBATIM: "Claude Sonnet 4.6 (temperature = 0)."
+    temperature: 0
+
+    # null. CRITICAL ABSENCE: No seed.  temp=0 drives greedy decoding
+    # in principle, but floating-point non-determinism across hardware
+    # and API versions means exact bitwise reproducibility is not
+    # guaranteed.
+    seed: null
+
+    # bool. DERIVED: temp=0 → greedy (in principle).
+    deterministic: true
+
+    # int. INFERRED: Same rationale as GPT-5.
+    max_tokens: 512
+
+    # str. INFERRED: Anthropic Messages API format.
+    api_message_format: "anthropic_messages_api"
+
+    # str. INFERRED: Top-level 'system' parameter in Anthropic API.
+    # The system prompt is NOT placed inside the messages array.
+    system_param_key: "system"
+
+    # str. INFERRED: messages array role label.
+    user_role_key: "user"
+
+    # int. INFERRED.
+    n_runs_reported: 1
+
+    # str. INFERRED: Standard Anthropic Messages API endpoint.
+    api_endpoint: "https://api.anthropic.com/v1/messages"
+
+    # str. INFERRED: Standard Anthropic API version header value.
+    anthropic_version_header: "2023-06-01"
+
+    # str. INFERRED: pip install anthropic
+    sdk_package: "anthropic"
+
+    # str. INFERRED.
+    call_structure_note: "[INFERRED] client.messages.create(model='claude-sonnet-4-6', max_tokens=512, system=system_prompt, messages=[{'role':'user','content':time_series}])"
+
+  # ----------------------------------------------------------------------------
+  # GEMINI 3 PRO CONFIGURATION
+  # SOURCE: Section 3, "Models", Pages 2-3.  Name and temperature VERBATIM.
+  # API model string: confirmed via ai.google.dev/gemini-api/docs/changelog
+  # gemini-3-pro-preview deprecated March 9, 2026.  Study data was collected
+  # prior to deprecation.
+  # ----------------------------------------------------------------------------
+  gemini_3_pro:
+
+    # str. VERBATIM, Section 3, "Models."
+    display_name: "Gemini 3 Pro"
+
+    # str. DERIVED.
+    provider: "Google"
+
+    # str. CONFIRMED: ai.google.dev/gemini-api/docs/changelog
+    # DEPRECATED March 9, 2026 — now redirects to gemini-3.1-pro-preview.
+    # For future replication, use "gemini-3.1-pro-preview".
+    api_model_id: "gemini-3-pro-preview"
+
+    # str. Same as api_model_id.
+    api_version_string: "gemini-3-pro-preview"
+
+    # str. CONFIRMED: Gemini API changelog VERBATIM.
+    deprecation_date: "2026-03-09"
+
+    # str. CONFIRMED: changelog: "gemini-3-pro-preview now points to
+    # gemini-3.1-pro-preview."
+    successor_model_id: "gemini-3.1-pro-preview"
+
+    # int. VERBATIM: "Gemini 3 Pro (temperature = 0)."
+    temperature: 0
+
+    # null. CRITICAL ABSENCE: No seed.  temp=0 → greedy (in principle).
+    seed: null
+
+    # bool. DERIVED: temp=0.
+    deterministic: true
+
+    # int. INFERRED: Google GenAI API uses "max_output_tokens"
+    # (not "max_tokens").  Same capacity rationale as GPT-5/Claude.
+    max_output_tokens: 512
+
+    # str. INFERRED: Google GenerativeAI API format.
+    api_message_format: "google_generativeai"
+
+    # str. INFERRED: Google GenAI API key for system instruction.
+    system_param_key: "system_instruction"
+
+    # str. INFERRED: contents array role label.
+    user_role_key: "user"
+
+    # int. INFERRED.
+    n_runs_reported: 1
+
+    # str. INFERRED: Google Generative Language API endpoint.
+    api_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent"
+
+    # str. INFERRED: pip install google-generativeai
+    sdk_package: "google-generativeai"
+
+    # str. INFERRED.
+    call_structure_note: "[INFERRED] client.models.generate_content(model='gemini-3-pro-preview', config={'system_instruction': system_prompt, 'temperature': 0, 'max_output_tokens': 512}, contents=[{'role':'user','parts':[{'text':time_series}]}])"
+
+
+# ==============================================================================
+# SECTION 8 — USER MESSAGE SERIALIZATION PARAMETERS
+# ==============================================================================
+
+user_message_params:
+
+  # str. VERBATIM: "the user message contains only the normalized time series."
+  # No preamble, header, or explanation.
+  user_message_content: "normalized_time_series_only"
+
+  # List[str]. "t" INFERRED. "PRICE INDEX" VERBATIM from Block 2.
+  condition_A_columns:
+    - "t"
+    - "PRICE INDEX"
+
+  # List[str]. "EPS INDEX" VERBATIM from Block 2.
+  # Column order matches Block 2 formula: PRICE INDEX before EPS INDEX.
+  conditions_BCD_columns:
+    - "t"
+    - "PRICE INDEX"
+    - "EPS INDEX"
+
+  # str. INFERRED.
+  table_format: "plain_text_fixed_width"
+
+  # bool. INFERRED: Dashes after header row.
+  header_separator: true
+
+  # int. INFERRED: 2 decimal places for all normalized values.
+  decimal_places: 2
+
+  # int. INFERRED: Characters for the "t" column.
+  index_col_width: 6
+
+  # int. INFERRED: Characters for each numeric column.
+  value_col_width: 14
+
+  # str. INFERRED: If model returns non-parseable JSON or direction not
+  # in {"up","neutral","down"}, default to "neutral" (s_t = 0.5).
+  # Most conservative defensible choice.  Paper specifies no rule.
+  non_compliant_response_fallback: "neutral"
+
+  # str. INFERRED format.  Values derived from normalization:
+  # P'_k = 100 * P_{84+k} / 435.71; EPS'_k = 100 * EPS_{84+k} / 435.71
+  # P/E check at k=1:  100.00 / 4.46 = 22.42 = 435.71 / 19.43 ✓
+  # P/E check at k=36: 141.37 / 7.62 = 18.55 = 615.93 / 33.20 ✓
+  # Context: Condition B/C/D, W=36, tau=1, dot-com (P_0 = 435.71;
+  # context: Jan 1993 — Dec 1995).
+  example_user_message_BCD_W36_tau1_dotcom: |
+    t     PRICE INDEX     EPS INDEX
+    --------------------------------
+    1          100.00          4.46
+    2          101.76          4.49
+    3          103.67          4.52
+    4          101.03          4.60
+    5          103.32          4.64
+    6          103.67          4.68
+    7          102.85          4.71
+    8          106.39          4.74
+    9          105.33          4.78
+    10         107.37          4.83
+    ...        ...             ...
+    36         141.37          7.62
+
+
+# ==============================================================================
+# SECTION 9 — ROLLING EVALUATION LOOP PARAMETERS
+# ==============================================================================
+
+rolling_eval_params:
+
+  # str. INFERRED: Unique formula satisfying n=72 for both W ∈ {36,60}.
+  t0_formula_algebraic: "t_0(tau) = tau_ep_start - W + tau - 1"
+
+  # str. INFERRED: Standard simple monthly return.
+  # Uses RAW (non-normalized) prices from df_yahoo_raw["Adj Close"].
+  # P[t0+W]   = forecast target month price.
+  # P[t0+W-1] = last month of context window price.
+  realized_return_formula: "r_tau = (P[t0(tau) + W] - P[t0(tau) + W - 1]) / P[t0(tau) + W - 1]"
+
+  # str. INFERRED: Simple arithmetic return (not log return).
+  # Consistent with portfolio return formula r_port = s_t * r_{t+1}.
+  return_type: "simple_not_log"
+
+  # bool. INFERRED: Realized returns use original P_t, NOT P'_k.
+  return_uses_raw_prices: true
+
+  sign_bucket_rule:
+    # str. r_tau > 0 → realized direction = "up".
+    positive_return: "up"
+    # str. r_tau < 0 → realized direction = "down".
+    negative_return: "down"
+    # str. r_tau = 0 → "neutral".  INFERRED edge case.
+    # In practice, exact zero monthly S&P 500 returns are extremely
+    # rare, so this choice has negligible empirical impact.
+    zero_return: "neutral"
+
+  # float. INFERRED: Boundary at r = 0.  No minimum magnitude.
+  sign_threshold: 0.0
+
+  # int. DERIVED.  All boundary forecast indices ≤ 288.
+  dataset_total_rows: 288
+
+
+# ==============================================================================
+# SECTION 10 — SHARPE RATIO PARAMETERS (EQUATION 1)
+# ==============================================================================
+# SOURCE: Appendix B, "Sharpe Ratio Results", Page 5 VERBATIM.
+# Eq (1): SR = sqrt(12) * E[r_port] / std[r_port]
+# P1    : r_port_t = s_t * r_{t+1}
+# ==============================================================================
+
+sharpe_params:
+
+  # VERBATIM, Appendix B.
+  position_map:
+    # float. VERBATIM. Fully long.
+    up: 1.0
+    # float. VERBATIM. Half-long / half-cash.
+    neutral: 0.5
+    # float. VERBATIM. Fully cash (zero return).
+    down: 0.0
+
+  # str. VERBATIM, Appendix B.
+  portfolio_return_formula: "r_port_t = s_t * r_{t+1}"
+
+  # float. DERIVED: When s_t = 0.0, r_port = 0.
+  # No risk-free rate appears anywhere in the paper.
+  cash_return: 0.0
+
+  # int. Months per year.  VERBATIM: "SR = sqrt(12) * ..."
+  annualization_factor: 12
+
+  # float. DERIVED: sqrt(12) = 3.4641016151377544.
+  # Pre-computed to avoid runtime math-library dependency.
+  # Python derivation: import math; math.sqrt(12)
+  sqrt_annualization_factor: 3.4641016151377544
+
+  # str. INFERRED: Sample std (denominator n-1).  Standard practice
+  # in financial econometrics for finite-sample Sharpe estimation.
+  # Paper writes std[·] without specifying the estimator.
+  std_estimator: "sample"
+
+  # int. DERIVED: n - 1 = 72 - 1 = 71.
+  std_denominator_per_episode: 71
+
+  # int. DERIVED: n - 1 = 144 - 1 = 143.
+  std_denominator_combined: 143
+
+  # str. INFERRED: Simple arithmetic mean.  Paper writes E[r_port].
+  mean_estimator: "arithmetic"
+
+  # int. VERBATIM.
+  n_obs_per_episode: 72
+
+  # int. VERBATIM.
+  n_obs_combined: 144
+
+  # float. VERBATIM: "s_t ≡ 1.0 always."
+  bah_position_value: 1.0
+
+  # float. VERBATIM, Table 3 caption. CALIBRATION TARGET.
+  bah_sharpe_dotcom: 0.65
+
+  # float. VERBATIM, Table 3 caption. CALIBRATION TARGET.
+  bah_sharpe_gfc: 0.02
+
+  # float. VERBATIM, Appendix B + Table 3 caption.
+  # PRIMARY DATA VERSION VERIFICATION TARGET.
+  bah_sharpe_combined: 0.35
+
+  # bool. VERBATIM key finding: "higher directional accuracy does not
+  # guarantee better risk-adjusted returns, because accuracy treats all
+  # months equally while economic performance is return-weighted."
+  accuracy_sharpe_divergence: true
+
+
+# ==============================================================================
+# SECTION 11 — DIRECTIONAL ACCURACY PARAMETERS
+# ==============================================================================
+
+accuracy_params:
+
+  # str. VERBATIM.
+  metric_name: "directional_accuracy"
+
+  # str. VERBATIM.
+  definition: "the fraction of months on which the predicted direction matches the realized direction"
+
+  # str. DERIVED: "fraction of months" → each month = weight 1/n.
+  weighting: "equal"
+
+  # float. DERIVED: 1 / 72.
+  weight_per_month_per_episode: 0.013888888888888888
+
+  # float. DERIVED: 1 / 144.
+  weight_per_month_combined: 0.006944444444444444
+
+  # List[str]. VERBATIM from output schema.
+  direction_labels:
+    - "up"
+    - "neutral"
+    - "down"
+
+  # str. INFERRED formal expression.
+  accuracy_formula: "Acc = (1/n) * sum_t( 1[d_hat_t == d_t] )"
+
+  # str. INFERRED: "up"=="up" → 1; all mismatches → 0.
+  indicator_match: "exact_string_equality"
+
+  # float. VERBATIM (implied): Section 4 references "the 50% random
+  # baseline" for GPT-5 at W=36.  NOTE: strictly, a 3-class uniform
+  # baseline would be 1/3 ≈ 0.333; the paper's 0.5 implies the
+  # effective comparison is binary (neutral is a non-directional bet).
+  random_baseline: 0.5
+
+  # int. VERBATIM.
+  n_obs_per_episode: 72
+
+  # int. VERBATIM.
+  n_obs_combined: 144
+
+
+# ==============================================================================
+# SECTION 12 — RESULTS TABLE ASSEMBLY PARAMETERS
+# ==============================================================================
+
+results_table_params:
+
+  table_1_directional_accuracy:
+    # str. VERBATIM: rows = {Dot-com, GFC, Overall combined} x {A,B,C,D}
+    # = 12 rows.
+    row_structure: "episode x condition"
+    # str. VERBATIM: cols = {GPT-5, Claude 4.6, Gemini 3 Pro}
+    # x {W=60, W=36} = 6 columns.
+    column_structure: "model x window"
+    # int. DERIVED: 12 rows * 6 columns.
+    n_cells: 72
+    # str. VERBATIM, Table 1 caption.
+    bolding_rule: "best per episode x model x context_window (max accuracy)"
+    # int. VERBATIM: values reported to 3 d.p. (e.g. 0.590).
+    decimal_places: 3
+
+  table_3_sharpe_ratios:
+    # str. Identical to Table 1.
+    row_structure: "episode x condition"
+    # str. Identical to Table 1.
+    column_structure: "model x window"
+    # int. DERIVED.
+    n_cells: 72
+    # str. VERBATIM, Table 3 caption.
+    bolding_rule: "best per episode x model x context_window (max Sharpe)"
+    # int. VERBATIM: values reported to 3 d.p. (e.g. 0.674).
+    decimal_places: 3
+    bah_benchmarks:
+      # float. VERBATIM, Table 3 caption.
+      dotcom: 0.65
+      gfc: 0.02
+      combined: 0.35
+
+  # str. INFERRED / METHODOLOGICAL NOTE.
+  combined_episode_note: >
+    The combined-episode row is NOT a simple average of per-episode values.
+    It concatenates the 144 portfolio return observations and recomputes
+    mean and standard deviation over the full sequence.  Simple averaging
+    of per-episode Sharpe ratios gives a different value due to Jensen's
+    inequality in the std denominator.
+
+
+# ==============================================================================
+# SECTION 13 — KEY REPORTED RESULTS (VERBATIM FROM TABLES 1 AND 3)
+# ==============================================================================
+# SOURCE: Tables 1 and 3, Pages 4 and 6 VERBATIM.
+# These are the original paper's numerical findings, included here as
+# validation targets for any reproduction attempt.
+# ==============================================================================
+
+reported_results:
+
+  table_1_accuracy_W60:
+    dotcom:
+      A: {gpt5: 0.514, claude: 0.528, gemini: 0.542}
+      B: {gpt5: 0.500, claude: 0.514, gemini: 0.569}
+      C: {gpt5: 0.528, claude: 0.486, gemini: 0.542}
+      D: {gpt5: 0.583, claude: 0.486, gemini: 0.597}
+    gfc:
+      A: {gpt5: 0.542, claude: 0.597, gemini: 0.556}
+      B: {gpt5: 0.556, claude: 0.542, gemini: 0.583}
+      C: {gpt5: 0.597, claude: 0.569, gemini: 0.597}
+      D: {gpt5: 0.597, claude: 0.569, gemini: 0.583}
+    combined:
+      A: {gpt5: 0.528, claude: 0.562, gemini: 0.549}
+      B: {gpt5: 0.528, claude: 0.528, gemini: 0.576}
+      C: {gpt5: 0.562, claude: 0.528, gemini: 0.569}
+      D: {gpt5: 0.590, claude: 0.528, gemini: 0.590}
+
+  table_1_accuracy_W36:
+    dotcom:
+      A: {gpt5: 0.486, claude: 0.569, gemini: 0.528}
+      B: {gpt5: 0.514, claude: 0.583, gemini: 0.486}
+      C: {gpt5: 0.514, claude: 0.528, gemini: 0.528}
+      D: {gpt5: 0.500, claude: 0.556, gemini: 0.542}
+    gfc:
+      A: {gpt5: 0.611, claude: 0.556, gemini: 0.569}
+      B: {gpt5: 0.569, claude: 0.542, gemini: 0.625}
+      C: {gpt5: 0.556, claude: 0.556, gemini: 0.611}
+      D: {gpt5: 0.514, claude: 0.583, gemini: 0.597}
+    combined:
+      A: {gpt5: 0.549, claude: 0.562, gemini: 0.549}
+      B: {gpt5: 0.542, claude: 0.562, gemini: 0.556}
+      C: {gpt5: 0.535, claude: 0.542, gemini: 0.569}
+      D: {gpt5: 0.507, claude: 0.569, gemini: 0.569}
+
+  table_3_sharpe_W60:
+    dotcom:
+      A: {gpt5:  0.148, claude:  0.110, gemini:  0.181}
+      B: {gpt5: -0.004, claude:  0.015, gemini:  0.300}
+      C: {gpt5:  0.135, claude: -0.066, gemini:  0.230}
+      D: {gpt5:  0.361, claude:  0.002, gemini:  0.336}
+    gfc:
+      A: {gpt5:  0.117, claude:  0.365, gemini: -0.094}
+      B: {gpt5:  0.461, claude:  0.020, gemini:  0.317}
+      # NOTE: 0.674 (GPT-5 C, GFC, W=60) is the highest single-cell
+      # Sharpe in the dataset.  VERBATIM, Table 3, Page 6.
+      C: {gpt5:  0.674, claude:  0.471, gemini:  0.503}
+      D: {gpt5:  0.531, claude:  0.121, gemini:  0.363}
+    combined:
+      A: {gpt5:  0.134, claude:  0.229, gemini:  0.052}
+      B: {gpt5:  0.211, claude:  0.017, gemini:  0.308}
+      C: {gpt5:  0.383, claude:  0.183, gemini:  0.357}
+      D: {gpt5:  0.440, claude:  0.058, gemini:  0.349}
+
+  table_3_sharpe_W36:
+    dotcom:
+      # NOTE: 0.559 (Claude A, dot-com, W=36) is Claude's highest
+      # dot-com Sharpe — achieved by staying fully long in the bull
+      # market under the naive condition.
+      A: {gpt5:  0.087, claude:  0.559, gemini:  0.104}
+      B: {gpt5:  0.032, claude:  0.454, gemini: -0.006}
+      C: {gpt5:  0.080, claude:  0.128, gemini:  0.161}
+      D: {gpt5:  0.086, claude:  0.256, gemini:  0.166}
+    gfc:
+      A: {gpt5:  0.262, claude:  0.032, gemini: -0.172}
+      B: {gpt5:  0.007, claude:  0.408, gemini:  0.395}
+      C: {gpt5: -0.096, claude:  0.324, gemini:  0.261}
+      D: {gpt5:  0.096, claude:  0.515, gemini:  0.404}
+    combined:
+      A: {gpt5:  0.169, claude:  0.311, gemini: -0.024}
+      B: {gpt5:  0.020, claude:  0.433, gemini:  0.181}
+      C: {gpt5: -0.002, claude:  0.219, gemini:  0.208}
+      D: {gpt5:  0.091, claude:  0.377, gemini:  0.277}
+
+
+# ==============================================================================
+# SECTION 14 — REPRODUCIBILITY CAVEATS AND CRITICAL ABSENCES
+# ==============================================================================
+
+reproducibility_caveats:
+
+  gpt5_stochasticity:
+    # str. VERBATIM severity classification.
+    severity: "FATAL"
+    description: >
+      GPT-5 runs at temperature=1.0 with no seed.  Every API call is a
+      fresh stochastic draw.  The paper's GPT-5 results are single-run
+      point estimates with no reported variance.  Exact numerical
+      reproduction of GPT-5 results is categorically impossible under
+      the paper's specification.
+    # str. VERBATIM, Section 3.
+    source: "VERBATIM, Section 3: 'adjustment is not permitted.'"
+
+  model_version_drift:
+    severity: "HIGH"
+    description: >
+      Paper provides no API version strings for any model.  Provider
+      checkpoint updates change forecasting behavior even at
+      temperature=0.  Results will differ numerically from original
+      after any provider update.
+    # List[str].
+    affected_models:
+      - "gpt5"
+      - "claude_sonnet_4_6"
+      - "gemini_3_pro"
+
+  yahoo_finance_data_revision:
+    severity: "HIGH"
+    description: >
+      Yahoo Finance retroactively revises Adj Close values upon new
+      dividend/split events.  The exact normalized series depends on
+      download date.  No download date is recorded.
+    mitigation: "Archive raw CSV; verify bah_sharpe targets."
+
+  shiller_data_revision:
+    severity: "MEDIUM"
+    description: >
+      Shiller periodically revises historical Earnings values.
+      Citation is 'Accessed May 2025' without file hash.
+    mitigation: "Archive raw Excel workbook at download time."
+
+  gemini_3_pro_deprecated:
+    severity: "HIGH"
+    description: >
+      gemini-3-pro-preview was deprecated and shut down on March 9, 2026.
+      By the paper's publication date (June 2026) this model was already
+      unavailable.  Future replications must use 'gemini-3.1-pro-preview'
+      as the closest successor.
+    # str. CONFIRMED.
+    source: "CONFIRMED: ai.google.dev/gemini-api/docs/changelog"
+
+  no_github_repository:
+    severity: "HIGH"
+    description: >
+      No code repository, supplementary material, or data archive link
+      of any kind is provided in the paper.
+
+  # List[str]. DERIVED from reproducibility audit.  All items are gaps
+  # filled by INFERRED choices in this configuration.
+  missing_specifications:
+    - "task_instruction_prose_verbatim"
+    - "user_message_serialization_format"
+    - "json_parsing_logic"
+    - "non_compliant_response_handling"
+    - "sample_vs_population_std_estimator"
+    - "realized_direction_sign_bucket_formula"
+    - "max_tokens_setting"
+    - "api_version_strings_all_three_models"
+    - "number_of_independent_runs_gpt5"
+    - "variance_estimates_for_any_metric"
+    - "confidence_intervals_for_any_result"
